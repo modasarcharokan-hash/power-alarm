@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>منبه انقطاع الكهرباء</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Changa:wght@500;700;800&family=Cairo:wght@500;700&display=swap">
+<style>
+  :root {
+    --bg: #0e1522;
+    --panel: #172136;
+    --line: #26334f;
+    --ink: #eef2ff;
+    --mute: #9aa8c7;
+    --idle: #2a3550;
+    --ok: #34d399;
+    --warn: #ffb020;
+    --bad: #ff4d5e;
+    color-scheme: dark;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  *, *::before, *::after { box-sizing: inherit; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: 'Cairo', Tahoma, 'Segoe UI', sans-serif;
+    font-size: 16px; line-height: 1.7;
+  }
+  main { max-width: 460px; margin: 0 auto; padding: 20px 20px 40px; display: flex; flex-direction: column; align-items: center; }
+  h1 { font-family: 'Changa', 'Cairo', Tahoma, sans-serif; font-weight: 800; font-size: 26px; margin: 8px 0 20px; }
+  h2 { font-family: 'Changa', 'Cairo', Tahoma, sans-serif; font-size: 18px; margin: 28px 0 8px; align-self: stretch; }
+
+  .orb {
+    width: 220px; height: 220px; border-radius: 50%;
+    border: 0; cursor: pointer; color: #08111f;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    background: var(--idle); color: var(--ink);
+    font-family: 'Changa', 'Cairo', sans-serif; font-weight: 700; font-size: 19px;
+    box-shadow: 0 0 0 10px rgba(255,255,255,.04);
+    transition: background .3s, box-shadow .3s;
+    touch-action: manipulation; padding: 0 24px; line-height: 1.3;
+  }
+  .orb svg { width: 64px; height: 64px; fill: currentColor; }
+  .orb[data-state="ok"] { background: var(--ok); color: #05281c; animation: ring 2.4s ease-out infinite; }
+  .orb[data-state="out"] { background: var(--bad); color: #fff; box-shadow: 0 0 0 10px rgba(255,77,94,.25); }
+  .orb:focus-visible { outline: 3px solid var(--warn); outline-offset: 6px; }
+  @keyframes ring {
+    0% { box-shadow: 0 0 0 0 rgba(52,211,153,.5); }
+    100% { box-shadow: 0 0 0 36px rgba(52,211,153,0); }
+  }
+
+  #status { text-align: center; margin: 22px 0 6px; min-height: 3.4em; max-width: 340px; }
+  #status.warn { color: var(--warn); }
+
+  .facts { display: flex; gap: 12px; align-self: stretch; margin-top: 8px; }
+  .fact { flex: 1; background: var(--panel); border-radius: 12px; padding: 10px 14px; }
+  .fact span { display: block; color: var(--mute); font-size: 13px; }
+  .fact b { font-size: 17px; }
+
+  .opt { align-self: stretch; display: flex; gap: 10px; align-items: center; margin-top: 18px; color: var(--ink); }
+  .opt input { width: 22px; height: 22px; accent-color: var(--warn); }
+
+  .ghost {
+    align-self: stretch; margin-top: 14px; padding: 12px;
+    background: transparent; color: var(--ink); border: 2px solid var(--line); border-radius: 12px;
+    font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; touch-action: manipulation;
+  }
+  .ghost:focus-visible { outline: 3px solid var(--warn); outline-offset: 2px; }
+
+  .row { align-self: stretch; display: flex; gap: 12px; align-items: center; margin-top: 14px; }
+  .row label { color: var(--mute); font-size: 14px; white-space: nowrap; }
+  .row select { flex: 1; min-width: 0; padding: 10px 12px; background: var(--panel); color: var(--ink); border: 2px solid var(--line); border-radius: 10px; font-family: inherit; font-size: 16px; }
+  .row input[type=range] { flex: 1; min-width: 0; accent-color: var(--warn); height: 28px; }
+  .row select:focus-visible, .row input:focus-visible { outline: 3px solid var(--warn); outline-offset: 2px; }
+  #log { list-style: none; margin: 0; padding: 0; align-self: stretch; }
+  #log li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  #log li .t { color: var(--mute); font-size: 14px; white-space: nowrap; }
+  #log li.bad .m { color: var(--bad); }
+  #log li.good .m { color: var(--ok); }
+  #empty { color: var(--mute); align-self: stretch; margin: 0; }
+
+  #alarm {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    padding: 24px; text-align: center;
+    background: var(--bad); color: #fff;
+    padding-top: calc(24px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    animation: flash 0.9s steps(1) infinite;
+  }
+  #alarm[hidden] { display: none; }
+  #alarm h2 { font-size: 44px; margin: 0; align-self: center; line-height: 1.2; }
+  #alarm p { margin: 0; font-size: 20px; }
+  #elapsed { font-family: 'Changa', sans-serif; font-size: 40px; font-variant-numeric: tabular-nums; }
+  #stopAlarm {
+    margin-top: 12px; padding: 16px 44px; border: 0; border-radius: 14px;
+    background: #fff; color: #7a0010; font-family: 'Changa', 'Cairo', sans-serif; font-size: 24px; font-weight: 800; cursor: pointer;
+  }
+  #stopAlarm:focus-visible { outline: 4px solid #000; outline-offset: 4px; }
+  @keyframes flash { 0% { background: #ff4d5e; } 50% { background: #b3182a; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .orb[data-state="ok"] { animation: none; }
+    #alarm { animation: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>منبه انقطاع الكهرباء</h1>
+
+  <button class="orb" id="toggle" data-state="idle" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+    <span id="orbLabel">ابدأ المراقبة</span>
+  </button>
+
+  <p id="status">وصّل الجهاز بالشاحن ثم اضغط للبدء. سأنبّهك بصوت عالٍ لحظة انقطاع التيار.</p>
+
+  <div class="facts">
+    <div class="fact"><span>البطارية</span><b id="batt">—</b></div>
+    <div class="fact"><span>آخر انقطاع</span><b id="lastOut">لا يوجد</b></div>
+  </div>
+
+  <label class="opt"><input type="checkbox" id="netOpt"> نبّهني أيضًا عند انقطاع الإنترنت</label>
+  <div class="row">
+    <label for="sound">النغمة</label>
+    <select id="sound">
+      <option value="siren">صفارة إنذار</option>
+      <option value="bell">جرس متناوب</option>
+      <option value="pulse">نبضات سريعة</option>
+    </select>
+  </div>
+  <div class="row">
+    <label for="vol">الصوت</label>
+    <input type="range" id="vol" min="0.1" max="0.8" step="0.05" value="0.4">
+  </div>
+  <button class="ghost" id="test">تجربة صوت الإنذار</button>
+
+  <h2>السجل</h2>
+  <p id="empty">لم تُسجَّل أي أحداث بعد.</p>
+  <ul id="log"></ul>
+</main>
+
+<div id="alarm" hidden role="alertdialog" aria-live="assertive" aria-labelledby="alarmTitle">
+  <h2 id="alarmTitle">انقطع التيار الكهربائي</h2>
+  <p>مرّ منذ الانقطاع</p>
+  <div id="elapsed">0:00</div>
+  <button id="stopAlarm">إيقاف الإنذار</button>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var orb = $('toggle'), orbLabel = $('orbLabel'), statusEl = $('status');
+  var battEl = $('batt'), lastOutEl = $('lastOut'), netOpt = $('netOpt');
+  var alarmEl = $('alarm'), elapsedEl = $('elapsed'), alarmTitle = $('alarmTitle');
+  var logEl = $('log'), emptyEl = $('empty');
+
+  var battery = null, armed = false, powerWatch = false;
+  var outAt = null, alarmKind = null, tick = null;
+  var ac = null, siren = null, wakeLock = null, bound = false;
+  var events = [];
+  var KEY = 'power-alarm-log';
+  var SOUNDS = {
+    siren: { type: 'square', lo: 620, hi: 960, ms: 450 },
+    bell: { type: 'sine', lo: 880, hi: 1320, ms: 250 },
+    pulse: { type: 'sawtooth', lo: 400, hi: 1200, ms: 120 }
+  };
+  var soundSel = $('sound'), volEl = $('vol');
+  try {
+    var prefs = JSON.parse(localStorage.getItem('power-alarm-prefs') || '{}') || {};
+    if (prefs.sound && SOUNDS[prefs.sound]) soundSel.value = prefs.sound;
+    if (prefs.vol) volEl.value = prefs.vol;
+  } catch (e) {}
+  function savePrefs() {
+    try { localStorage.setItem('power-alarm-prefs', JSON.stringify({ sound: soundSel.value, vol: volEl.value })); } catch (e) {}
+  }
+  soundSel.addEventListener('change', savePrefs);
+  volEl.addEventListener('change', savePrefs);
+
+  try { events = JSON.parse(localStorage.getItem(KEY) || '[]') || []; } catch (e) { events = []; }
+
+  // ---------- helpers ----------
+  function fmtTime(ts) {
+    try { return new Date(ts).toLocaleString('ar', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+    catch (e) { return new Date(ts).toLocaleString(); }
+  }
+  function fmtDur(ms) {
+    var s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    function p(n) { return n < 10 ? '0' + n : '' + n; }
+    return h > 0 ? h + ':' + p(m) + ':' + p(r) : m + ':' + p(r);
+  }
+  function setStatus(t, warn) { statusEl.textContent = t; statusEl.className = warn ? 'warn' : ''; }
+
+  function addEvent(kind, msg, extra) {
+    events.unshift({ kind: kind, msg: msg, t: Date.now(), extra: extra || '' });
+    events = events.slice(0, 30);
+    try { localStorage.setItem(KEY, JSON.stringify(events)); } catch (e) {}
+    renderLog();
+  }
+  function renderLog() {
+    logEl.innerHTML = '';
+    emptyEl.hidden = events.length > 0;
+    var lastOut = null;
+    events.forEach(function (ev) {
+      var li = document.createElement('li');
+      li.className = ev.kind === 'bad' ? 'bad' : 'good';
+      var m = document.createElement('span'); m.className = 'm'; m.textContent = ev.msg + (ev.extra ? ' (' + ev.extra + ')' : '');
+      var t = document.createElement('span'); t.className = 't'; t.textContent = fmtTime(ev.t);
+      li.appendChild(m); li.appendChild(t); logEl.appendChild(li);
+      if (!lastOut && ev.kind === 'bad') lastOut = ev;
+    });
+    lastOutEl.textContent = lastOut ? fmtTime(lastOut.t) : 'لا يوجد';
+    lastOutEl.style.fontSize = lastOut ? '14px' : '';
+  }
+
+  // ---------- audio ----------
+  function ensureAudio() {
+    if (!ac) { var C = window.AudioContext || window.webkitAudioContext; if (C) { try { ac = new C(); } catch (e) {} } }
+    if (ac && ac.state === 'suspended') { try { ac.resume(); } catch (e) {} }
+  }
+  function startSiren() {
+    ensureAudio();
+    if (siren) return;
+    siren = {};
+    if (ac) {
+      var o = ac.createOscillator(), g = ac.createGain(), hi = false;
+      var S = SOUNDS[soundSel.value] || SOUNDS.siren;
+      o.type = S.type; o.frequency.value = S.lo; g.gain.value = parseFloat(volEl.value) || 0.4;
+      o.connect(g); g.connect(ac.destination); o.start();
+      siren.o = o;
+      siren.iv = setInterval(function () { hi = !hi; o.frequency.setValueAtTime(hi ? S.hi : S.lo, ac.currentTime); }, S.ms);
+    }
+    function buzz() { try { if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]); } catch (e) {} }
+    buzz(); siren.vib = setInterval(buzz, 1800);
+  }
+  function stopSiren() {
+    if (!siren) return;
+    if (siren.iv) clearInterval(siren.iv);
+    if (siren.vib) clearInterval(siren.vib);
+    if (siren.o) { try { siren.o.stop(); } catch (e) {} }
+    try { if (navigator.vibrate) navigator.vibrate(0); } catch (e) {}
+    siren = null;
+  }
+  function chime() {
+    ensureAudio(); if (!ac) return;
+    [660, 880].forEach(function (f, i) {
+      var o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + i * 0.22;
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.3, t + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+      o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.32);
+    });
+  }
+
+  // ---------- wake lock ----------
+  function getLock() {
+    try {
+      if (armed && 'wakeLock' in navigator && !wakeLock) {
+        navigator.wakeLock.request('screen').then(function (l) {
+          wakeLock = l; l.addEventListener('release', function () { wakeLock = null; });
+        }).catch(function () {});
+      }
+    } catch (e) {}
+  }
+  function dropLock() { try { if (wakeLock) wakeLock.release(); } catch (e) {} wakeLock = null; }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) getLock(); });
+
+  // ---------- alarm ----------
+  function notify(title, body) {
+    try {
+      if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body: body, tag: 'power-alarm' });
+    } catch (e) {}
+  }
+  function showAlarm(kind) {
+    alarmKind = kind; outAt = outAt || Date.now();
+    var title = kind === 'net' ? 'انقطع الإنترنت' : 'انقطع التيار الكهربائي';
+    alarmTitle.textContent = title;
+    alarmEl.hidden = false;
+    startSiren();
+    notify(title, 'اضغط لفتح المنبه');
+    document.title = '⚠ ' + title;
+    clearInterval(tick);
+    elapsedEl.textContent = '0:00';
+    tick = setInterval(function () { elapsedEl.textContent = fmtDur(Date.now() - outAt); }, 1000);
+  }
+  function dismissAlarm() {
+    alarmEl.hidden = true; stopSiren();
+  }
+  function restored(kind) {
+    var dur = outAt ? fmtDur(Date.now() - outAt) : '';
+    dismissAlarm(); clearInterval(tick); tick = null;
+    addEvent('good', kind === 'net' ? 'عاد الإنترنت' : 'عاد التيار', dur ? 'استمر ' + dur : '');
+    outAt = null; alarmKind = null;
+    document.title = 'منبه انقطاع الكهرباء';
+    chime(); render();
+  }
+
+  function powerOut() {
+    if (outAt && alarmKind === 'power') return;
+    outAt = Date.now();
+    addEvent('bad', 'انقطع التيار');
+    showAlarm('power'); render();
+  }
+
+  // ---------- state ----------
+  function render() {
+    var out = !!outAt;
+    orb.dataset.state = !armed ? 'idle' : out ? 'out' : 'ok';
+    orb.setAttribute('aria-pressed', armed ? 'true' : 'false');
+    orbLabel.textContent = !armed ? 'ابدأ المراقبة' : out ? (alarmKind === 'net' ? 'الإنترنت مقطوع' : 'التيار مقطوع') : 'المراقبة تعمل';
+    if (!armed) setStatus('وصّل الجهاز بالشاحن ثم اضغط للبدء. سأنبّهك بصوت عالٍ لحظة انقطاع التيار.');
+    else if (out) setStatus('سأوقف الصوت تلقائيًا ويُسجَّل الحدث عند عودة الخدمة.', true);
+    else setStatus('التيار متصل. أبقِ هذه الصفحة مفتوحة والشاشة مضاءة؛ سأنبّهك فور الانقطاع.');
+    updateBatt();
+  }
+  function updateBatt() {
+    if (!battery) { battEl.textContent = '—'; return; }
+    battEl.textContent = Math.round(battery.level * 100) + '% · ' + (battery.charging ? 'موصول' : 'غير موصول');
+  }
+
+  function bindBattery() {
+    if (bound || !battery) return; bound = true;
+    battery.addEventListener('levelchange', updateBatt);
+    battery.addEventListener('chargingchange', function () {
+      updateBatt();
+      if (!armed || !powerWatch) return;
+      if (!battery.charging) powerOut();
+      else if (outAt && alarmKind === 'power') restored('power');
+      else if (outAt) { /* net outage still active */ }
+      else render();
+    });
+  }
+
+  window.addEventListener('offline', function () {
+    if (!armed || !netOpt.checked || outAt) return;
+    addEvent('bad', 'انقطع الإنترنت'); showAlarm('net'); render();
+  });
+  window.addEventListener('online', function () {
+    if (!armed || alarmKind !== 'net') return;
+    restored('net');
+  });
+
+  function arm() {
+    ensureAudio();
+    try {
+      if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+    } catch (e) {}
+    var hasBattery = typeof navigator.getBattery === 'function';
+    var go = function () {
+      if (hasBattery && battery) bindBattery();
+      powerWatch = !!(battery && battery.charging);
+      if (hasBattery && battery && !battery.charging && !netOpt.checked) {
+        setStatus('الجهاز غير موصول بالشاحن حاليًا. وصّله أولًا ثم ابدأ المراقبة.', true);
+        return;
+      }
+      if (!hasBattery && !netOpt.checked) {
+        netOpt.checked = true;
+      }
+      armed = true;
+      getLock();
+      render();
+      if (!hasBattery) setStatus('متصفحك لا يقرأ حالة الشاحن (مثل Safari على الآيفون)، لذلك أراقب الإنترنت فقط. للمراقبة الكاملة استخدم Chrome على أندرويد.', true);
+      else if (!powerWatch) setStatus('أراقب الإنترنت فقط لأن الجهاز غير موصول بالشاحن.', true);
+    };
+    if (hasBattery) {
+      navigator.getBattery().then(function (b) { battery = b; go(); }).catch(function () { hasBattery = false; go(); });
+    } else go();
+  }
+  function disarm() {
+    armed = false; powerWatch = false; outAt = null; alarmKind = null;
+    clearInterval(tick); tick = null; dismissAlarm(); dropLock();
+    document.title = 'منبه انقطاع الكهرباء'; render();
+  }
+
+  orb.addEventListener('click', function () { armed ? disarm() : arm(); });
+  $('stopAlarm').addEventListener('click', function () { dismissAlarm(); render(); });
+  $('test').addEventListener('click', function () {
+    ensureAudio(); startSiren();
+    setTimeout(stopSiren, 2500);
+  });
+
+  renderLog();
+  render();
+  if (typeof navigator.getBattery === 'function') {
+    navigator.getBattery().then(function (b) { battery = b; bindBattery(); updateBatt(); }).catch(function () {});
+  }
+})();
+</script>
+</body>
+</html>
